@@ -6,7 +6,7 @@ Animated GIF player for the **Cheap Yellow Display (ESP32-2432S028, CYD2USB vari
 
 *(Chrome or Edge on desktop required — see [Quick Start](#1-build-and-flash) below for details and the PlatformIO alternative.)*
 
-<video src="https://github.com/bluemistP/cyd-gif-player/raw/main/sample.mp4" controls width="360"></video>
+https://github.com/user-attachments/assets/1133a82c-9222-4717-8181-4d4a0dc6d4e3
 
 ## Human is speaking here
 
@@ -201,9 +201,3 @@ cyd-gif-player/
 ## License
 
 MIT
-
-## Credits
-
-- **CYD Hardware:** community-manufactured "Cheap Yellow Display" boards
-- **TFT_eSPI:** Bodmer
-- **AnimatedGIF:** bitbank2
