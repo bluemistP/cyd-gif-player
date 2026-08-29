@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYD GIF Player</title>
+    <style>
+      :root {
+        --bg: #0d1117; --surface: #161b22; --surface-2: #0a0d11; --border: #30363d;
+        --text: #c9d1d9; --text-dim: #8b949e; --accent: #58a6ff;
+        --green: #3fb950; --red: #f85149; --yellow: #d29922;
+        --radius: 8px;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        background: var(--bg); color: var(--text); min-height: 100vh;
+      }
+
+      .container { max-width: 760px; margin: 0 auto; padding: 32px 20px 60px; }
+      h1 { font-size: 1.6rem; margin-bottom: 4px; }
+      .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 24px; }
+
+      .card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+      }
+      .card h2 {
+        color: var(--text-dim); font-weight: 500; text-transform: uppercase;
+        letter-spacing: 0.5px; font-size: 0.75rem; margin-bottom: 12px;
+      }
+      .card-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 12px;
+      }
+      .card-header h2 { margin-bottom: 0; }
+
+      /* Upload card */
+      .url-row { display: flex; gap: 10px; margin-bottom: 16px; }
+
+      input[type="text"] {
+        flex: 1; min-width: 0;
+        padding: 10px 14px; font-size: 0.9rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+      }
+      input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+      .dropzone {
+        border: 2px dashed var(--border);
+        border-radius: var(--radius);
+        padding: 26px 20px;
+        text-align: center;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .dropzone:hover,
+      .dropzone.dragover { border-color: var(--accent); background: rgba(88, 166, 255, 0.06); }
+      .dropzone-label { cursor: pointer; display: block; font-size: 0.95rem; color: var(--text); }
+      .dropzone-label .hint { display: block; margin-top: 6px; }
+
+      .hint { font-size: 0.78em; color: var(--text-dim); line-height: 1.45; display: block; margin-top: 6px; }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        padding: 10px 20px; border-radius: var(--radius); font-size: 0.9rem;
+        font-weight: 500; border: 1px solid var(--border); cursor: pointer;
+        background: var(--surface); color: var(--text); transition: all 0.15s;
+      }
+      .btn:hover:not(:disabled) { background: #1c2129; border-color: var(--text-dim); }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .btn.primary:hover:not(:disabled) { background: #4090e0; }
+      .btn.danger { color: var(--red); border-color: rgba(248, 81, 73, 0.4); background: transparent; }
+      .btn.danger:hover:not(:disabled) { background: rgba(248, 81, 73, 0.1); }
+      .btn.small { padding: 6px 14px; font-size: 0.8rem; }
+
+      /* Status card */
+      .status-text { font-size: 0.9rem; margin-bottom: 10px; word-break: break-word; min-height: 1.2em; }
+      .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; width: 0%; transition: width 0.2s; }
+
+      /* Error banner (same visual language as the installer's .status pill) */
+      .error {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: var(--radius);
+        font-size: 0.88rem; margin-bottom: 16px;
+        background: rgba(248, 81, 73, 0.1); color: var(--red);
+      }
+
+      /* File list */
+      .file-list { display: flex; flex-direction: column; gap: 8px; }
+
+      .file-row {
+        display: flex; justify-content: space-between; align-items: center;
+        background: var(--surface-2); border: 1px solid var(--border);
+        padding: 10px 14px; border-radius: var(--radius);
+      }
+      .file-row-playing { border-color: var(--accent); background: rgba(88, 166, 255, 0.08); }
+
+      .now-playing-badge {
+        display: inline-block; margin-left: 8px;
+        padding: 2px 8px; font-size: 0.75em;
+        background: var(--accent); color: #fff;
+        border-radius: 10px; white-space: nowrap;
+      }
+
+      .file-row .file-thumb {
+        width: 72px; height: 72px; object-fit: cover;
+        border-radius: 6px; background: var(--bg); flex-shrink: 0;
+      }
+
+      .file-row .file-name {
+        font-size: 0.9em; word-break: break-all; flex: 1; margin: 0 12px;
+      }
+
+      .file-row .file-size {
+        display: block; font-size: 0.78em; color: var(--text-dim); margin-top: 2px;
+      }
+
+      .empty-state { color: var(--text-dim); text-align: center; padding: 20px; font-size: 0.9rem; }
+
+      .note {
+        font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; margin-top: 16px;
+        text-align: center;
+      }
+
+      /* Edit-before-uploading overlay */
+      .editor-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(5, 6, 8, 0.92);
+        z-index: 100;
+        overflow-y: auto;
+      }
+      .editor-overlay.open { display: block; }
+
+      .editor-panel {
+        max-width: 900px;
+        margin: 20px auto;
+        padding: 20px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      @media (max-width: 760px) {
+        .editor-panel { grid-template-columns: 1fr; }
+      }
+      .editor-panel h2 {
+        grid-column: 1 / -1;
+        font-size: 1.2em;
+        margin-bottom: 4px;
+        color: var(--text);
+        text-transform: none;
+        letter-spacing: normal;
+      }
+
+      .editor-col { display: flex; flex-direction: column; gap: 16px; }
+
+      .crop-stage { position: relative; background: var(--surface-2); margin: 0 auto; touch-action: none; }
+      .crop-stage canvas { display: block; }
+
+      .crop-box {
+        position: absolute;
+        border: 2px solid var(--accent);
+        background: rgba(88, 166, 255, 0.15);
+        cursor: move;
+      }
+      .crop-box .resize-handle {
+        position: absolute; right: -7px; bottom: -7px;
+        width: 14px; height: 14px;
+        background: var(--accent); border-radius: 3px;
+        cursor: nwse-resize;
+      }
+
+      .field { display: flex; flex-direction: column; gap: 4px; }
+      .field label { font-size: 0.85em; color: var(--text-dim); display: flex; justify-content: space-between; }
+      .field input[type="range"] { width: 100%; }
+      .field select {
+        padding: 8px; border-radius: 6px;
+        background: var(--surface-2); color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .checkbox-field { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+
+      .preview-stage {
+        display: flex; justify-content: center;
+        background: var(--surface-2); border-radius: var(--radius); padding: 10px;
+      }
+      .preview-stage canvas { image-rendering: pixelated; }
+
+      .editor-summary { grid-column: 1 / -1; font-size: 0.85em; color: var(--accent); text-align: center; }
+
+      .editor-actions { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 CYD GIF Player</h1>
+        <p class="subtitle">Paste a GIF link or upload a file to send it to your Cheap Yellow Display</p>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div class="card">
+            <h2>Add a GIF</h2>
+            <div class="url-row">
+                <input type="text" id="urlInput" placeholder="Paste a direct .gif/.png/.jpg/.webp URL..." />
+                <button class="btn primary" id="urlSendBtn" onclick="sendFromUrl()">Send</button>
+            </div>
+
+            <div class="dropzone" id="dropzone">
+                <label for="fileInput" class="dropzone-label">
+                    📁 Drop a file here, or click to browse
+                    <span class="hint">.gif, .png, .jpg, .webp, .mp4, .webm</span>
+                </label>
+                <input type="file" id="fileInput" accept=".gif,.png,.jpg,.jpeg,.webp,.bmp,.mp4,.webm,image/*,video/*" onchange="handleFileInputChange(event)" style="display:none" />
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Status</h2>
+            <div class="status-text" id="status">Ready</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Files on device</h2>
+            </div>
+            <div id="fileList" class="file-list">
+                <p class="empty-state">Loading...</p>
+            </div>
+        </div>
+
+        <p class="note">CYD GIF Player · web UI runs entirely from the device, no cloud involved</p>
+    </div>
+
+    <div class="editor-overlay" id="editorOverlay">
+        <div class="editor-panel">
+            <h2>✂️ Edit before uploading</h2>
+
+            <div class="field" style="grid-column: 1 / -1;">
+                <label>Live preview (what will play on the CYD) — reflects crop, skip, and color settings</label>
+                <div class="preview-stage">
+                    <canvas id="previewCanvas" width="240" height="320" style="width:360px;height:480px"></canvas>
+                </div>
+            </div>
+
+            <div class="editor-col">
+                <div class="field">
+                    <label>Crop / zoom (drag to move, corner to resize) <span id="cropDims"></span></label>
+                    <div class="crop-stage" id="cropStage">
+                        <canvas id="cropCanvas"></canvas>
+                        <div class="crop-box" id="cropBox"><div class="resize-handle" id="cropHandle"></div></div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Rotate</label>
+                    <button class="btn" id="rotateBtn" type="button">⟳ Rotate 90°</button>
+                </div>
+
+                <div class="field">
+                    <label>Skip frames <span id="skipLabel"></span></label>
+                    <input type="range" id="skipSlider" min="1" max="8" value="1" />
+                    <div class="hint">Keep 1 out of every N frames — fewer frames means faster decoding on the device. Dropped frames' time is added to the frame kept, so the loop still takes the same total time.</div>
+                </div>
+            </div>
+
+            <div class="editor-col">
+                <div class="field">
+                    <label>Colors</label>
+                    <select id="colorReduction">
+                        <option value="none">Full (up to 256)</option>
+                        <option value="medium">Reduced</option>
+                        <option value="high">Minimal</option>
+                    </select>
+                    <div class="hint">Fewer colors means a smaller file and slightly less decode work on the CYD — flat-shaded art (like most anime) usually looks fine even at "Minimal". Shown live in the preview above.</div>
+                </div>
+
+                <div class="checkbox-field">
+                    <input type="checkbox" id="ditherCheck" />
+                    <label for="ditherCheck">Dither (reduces color banding, adds slight speckle noise)</label>
+                </div>
+
+                <div class="hint">Note: this doesn't re-encode with per-frame delta/bounding-box compression (like gifsicle -O3) — that would need a much bigger custom encoder. The wins here come from fewer frames, a smaller crop, and fewer colors.</div>
+            </div>
+
+            <div class="editor-summary" id="editorSummary"></div>
+
+            <div class="editor-actions">
+                <button class="btn primary" id="editorUploadBtn" type="button">Upload</button>
+                <button class="btn" id="editorCancelBtn" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/gif.js"></script>
+    <script type="module">
+        import { parseGIF, decompressFrames } from '/gifuct.js';
+
+        const CYD_HOST = window.location.hostname || '192.168.1.100';
+        const CYD_PORT = 80;
+
+        // Must match LFS_UPLOAD_CAP_BYTES in firmware/src/main.cpp — the
+        // device's onboard-flash fallback storage used when no SD card is
+        // inserted (a small fixed budget shared across every uploaded GIF).
+        const NO_SD_UPLOAD_CAP_BYTES = 500 * 1024;
+
+        // Screen is 240x320 — never worth sending pixels the CYD can't show,
+        // and the AnimatedGIF decoder library flatly refuses anything over 480px wide.
+        const MAX_W = 240;
+        const MAX_H = 320;
+
+        document.getElementById('urlInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendFromUrl();
+        });
+
+        async function isGifBlob(blob) {
+            const head = new Uint8Array(await blob.slice(0, 6).arrayBuffer());
+            const sig = String.fromCharCode(...head);
+            return sig === 'GIF87a' || sig === 'GIF89a';
+        }
+
+        // The ESP32 side only ever decodes GIF — everything else (PNG, JPG,
+        // WebP, BMP, ...) gets converted to a single-frame GIF here, in the
+        // browser, before it's ever sent. Keeps the device's decode path to
+        // exactly one format instead of adding new decoder libraries on it.
+        // Note: an *animated* WebP only yields its first frame this way —
+        // <img>/createImageBitmap only ever exposes one frame of it, there's
+        // no way to pull the rest out without a dedicated WebP decoder.
+        async function convertToGifIfNeeded(blob, statusEl) {
+            if (await isGifBlob(blob)) return blob;
+
+            statusEl.textContent = 'Converting image to GIF...';
+            const bitmap = await createImageBitmap(blob);
+            const canvas = document.createElement('canvas');
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            canvas.getContext('2d').drawImage(bitmap, 0, 0);
+
+            const encoder = new GIF({
+                workers: 2,
+                quality: 1,
+                width: bitmap.width,
+                height: bitmap.height,
+                workerScript: '/gif.worker.js',
+                globalPalette: true,
+            });
+            encoder.addFrame(canvas, { copy: true, delay: 100 });
+
+            return new Promise((resolve, reject) => {
+                encoder.on('finished', (resultBlob) => resolve(resultBlob));
+                encoder.on('abort', () => reject(new Error('Conversion aborted')));
+                encoder.render();
+            });
+        }
+
+        // Samples frames out of a local video file at a fixed rate (seeking
+        // + drawing to canvas — the browser's own <video> element does all
+        // the actual MP4/WebM decoding, no extra library needed) and hands
+        // them straight to the editor in the same { srcW, srcH, frames }
+        // shape decodeFullFrames() produces for GIFs. Deliberately samples
+        // at a modest fps and caps the clip length up front — extracting
+        // every frame of a video-length clip would produce an enormous,
+        // slow-to-encode GIF; further trimming happens in the editor
+        // (skip-frames, crop, color reduction) same as any other source.
+        async function extractVideoFrames(file, statusEl, startSec, clipSec, fps) {
+            const video = document.createElement('video');
+            video.muted = true;
+            video.src = URL.createObjectURL(file);
+            statusEl.textContent = 'Loading video...';
+            await new Promise((resolve, reject) => {
+                video.onloadedmetadata = resolve;
+                video.onerror = () => reject(new Error('Could not load video'));
+            });
+
+            const start = Math.max(0, Math.min(startSec, video.duration));
+            const duration = Math.max(0, Math.min(clipSec, video.duration - start));
+            const frameCount = Math.max(1, Math.round(duration * fps));
+            const frameIntervalMs = Math.round(1000 / fps);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            const frames = [];
+            for (let i = 0; i < frameCount; i++) {
+                const t = start + i / fps;
+                video.currentTime = t;
+                await new Promise((resolve) => { video.onseeked = resolve; });
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                frames.push({ imageData: ctx.getImageData(0, 0, canvas.width, canvas.height), delay: frameIntervalMs });
+                statusEl.textContent = `Extracting frame ${i + 1}/${frameCount}...`;
+            }
+
+            URL.revokeObjectURL(video.src);
+            return { srcW: canvas.width, srcH: canvas.height, frames };
+        }
+
+        // Default video-extraction settings — no dedicated UI for these
+        // anymore (kept things to a single drop target instead); the
+        // editor's skip-frames slider is where further trimming happens.
+        const VIDEO_DEFAULT_START_SEC = 0;
+        const VIDEO_DEFAULT_CLIP_SEC = 3;
+        const VIDEO_DEFAULT_FPS = 10;
+
+        // Single entry point for any local file, whether picked via the
+        // file input or dropped onto the dropzone — always ends up in the
+        // editor, video or otherwise.
+        async function handleLocalFile(file) {
+            const statusEl = document.getElementById('status');
+            try {
+                if (file.type.startsWith('video/')) {
+                    const { srcW, srcH, frames } = await extractVideoFrames(
+                        file, statusEl, VIDEO_DEFAULT_START_SEC, VIDEO_DEFAULT_CLIP_SEC, VIDEO_DEFAULT_FPS);
+                    statusEl.textContent = 'Ready';
+                    openEditorWithFrames(srcW, srcH, frames);
+                } else {
+                    const blob = await convertToGifIfNeeded(file, statusEl);
+                    await openEditor(blob, statusEl, null);
+                }
+            } catch (error) {
+                statusEl.textContent = `❌ ${error.message}`;
+                showError(`Could not process that file: ${error.message}`);
+            }
+        }
+
+        function handleFileInputChange(event) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (file) handleLocalFile(file);
+        }
+
+        async function sendFromUrl() {
+            const input = document.getElementById('urlInput');
+            const url = input.value.trim();
+            if (!url) return;
+
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = 'Fetching GIF...';
+
+            try {
+                // The remote host must allow cross-origin reads (most GIF
+                // CDNs like Giphy/Tenor do) or this fetch will fail/be opaque.
+                const response = await fetch(url, { mode: 'cors' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                let blob = await response.blob();
+                if (blob.size === 0) throw new Error('Empty response — the site may block cross-origin fetches');
+                blob = await convertToGifIfNeeded(blob, statusEl);
+
+                statusEl.textContent = 'Ready';
+                await openEditor(blob, statusEl, null);
+                input.value = '';
+            } catch (error) {
+                statusEl.textContent = `❌ ${error.message}`;
+                showError(`Could not process that GIF: ${error.message}`);
+            }
+        }
+
+        // Decodes every frame into full, disposal-composited ImageData at
+        // source resolution — gifuct-js only gives each frame's *changed*
+        // region, so this replays disposal methods to reconstruct what's
+        // actually on screen at each frame. Shared by the plain auto-resize
+        // path and the editor, so both see identical frame content.
+        function decodeFullFrames(parsed) {
+            const srcW = parsed.lsd.width;
+            const srcH = parsed.lsd.height;
+            const rawFrames = decompressFrames(parsed, true);
+
+            const full = document.createElement('canvas');
+            full.width = srcW;
+            full.height = srcH;
+            const fullCtx = full.getContext('2d');
+
+            const frames = [];
+            let previousSnapshot = null;
+            for (const frame of rawFrames) {
+                const disposal = frame.disposalType;
+                if (disposal === 3 && !previousSnapshot) {
+                    previousSnapshot = fullCtx.getImageData(0, 0, srcW, srcH);
+                }
+
+                const patchCanvas = document.createElement('canvas');
+                patchCanvas.width = frame.dims.width;
+                patchCanvas.height = frame.dims.height;
+                patchCanvas.getContext('2d').putImageData(
+                    new ImageData(frame.patch, frame.dims.width, frame.dims.height), 0, 0
+                );
+                fullCtx.drawImage(patchCanvas, frame.dims.left, frame.dims.top);
+
+                frames.push({ imageData: fullCtx.getImageData(0, 0, srcW, srcH), delay: frame.delay || 100 });
+
+                if (disposal === 2) {
+                    fullCtx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+                } else if (disposal === 3 && previousSnapshot) {
+                    fullCtx.putImageData(previousSnapshot, 0, 0);
+                    previousSnapshot = null;
+                }
+            }
+            return { srcW, srcH, frames };
+        }
+
+        // Posterizes (reduces per-channel bit depth of) an ImageData in
+        // place — a simple, fast approximation of "fewer colors" without
+        // computing a real reduced palette. step=0 leaves it untouched.
+        function posterize(imageData, step) {
+            if (!step) return imageData;
+            const d = imageData.data;
+            for (let i = 0; i < d.length; i += 4) {
+                d[i]     = Math.min(255, Math.round(d[i] / step) * step);
+                d[i + 1] = Math.min(255, Math.round(d[i + 1] / step) * step);
+                d[i + 2] = Math.min(255, Math.round(d[i + 2] / step) * step);
+            }
+            return imageData;
+        }
+
+        // Crops+scales `frames` (full source-resolution ImageData) through
+        // `cropRect` (source pixel coords) into a dstW x dstH GIF blob.
+        function encodeFrames(frames, srcW, srcH, cropRect, dstW, dstH, opts) {
+            const src = document.createElement('canvas');
+            src.width = srcW;
+            src.height = srcH;
+            const srcCtx = src.getContext('2d');
+
+            const dst = document.createElement('canvas');
+            dst.width = dstW;
+            dst.height = dstH;
+            const dstCtx = dst.getContext('2d');
+
+            const encoderOpts = {
+                workers: 2,
+                // gif.js quality is a sampling interval, not a 0-100 score —
+                // lower is better, 1 is the max. Always encode at max
+                // quality; the only real user-facing size/speed lever is
+                // the color-reduction option below.
+                quality: 1,
+                width: dstW,
+                height: dstH,
+                workerScript: '/gif.worker.js',
+                // One shared palette across all frames instead of a fresh
+                // one per frame — meaningfully smaller output for typical
+                // animations with a consistent color range.
+                globalPalette: true,
+            };
+            if (opts.dither) encoderOpts.dither = 'FloydSteinberg';
+            const encoder = new GIF(encoderOpts);
+
+            const posterizeStep = opts.posterizeStep || 0;
+            for (const f of frames) {
+                srcCtx.putImageData(posterizeStep ? posterize(f.imageData, posterizeStep) : f.imageData, 0, 0);
+                dstCtx.clearRect(0, 0, dstW, dstH);
+                dstCtx.drawImage(src, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, dstW, dstH);
+                encoder.addFrame(dstCtx, { copy: true, delay: f.delay });
+            }
+
+            return new Promise((resolve, reject) => {
+                encoder.on('finished', (resultBlob) => resolve(resultBlob));
+                encoder.on('abort', () => reject(new Error('Re-encoding aborted')));
+                encoder.render();
+            });
+        }
+
+        // ──────────────────────────────────────────────
+        // Edit-before-uploading page
+        // ──────────────────────────────────────────────
+        const ASPECT = MAX_W / MAX_H; // 240:320
+        let editorState = null; // { originalFrames, originalW, originalH, rotation, srcW, srcH, sourceFrames }
+        let previewTimer = null;
+
+        async function openEditor(blob, statusEl, progressFill) {
+            statusEl.textContent = 'Decoding GIF...';
+            const buffer = await blob.arrayBuffer();
+            const parsed = parseGIF(buffer);
+            const { srcW, srcH, frames } = decodeFullFrames(parsed);
+            statusEl.textContent = 'Ready';
+            openEditorWithFrames(srcW, srcH, frames);
+        }
+
+        // Rotates every frame by `rotation` degrees (0/90/180/270) around
+        // its center, swapping width/height for 90/270. Always rotates from
+        // the ORIGINAL decoded frames (not the currently-displayed ones) so
+        // repeated rotation doesn't compound resampling error.
+        function rotateFrames(frames, srcW, srcH, rotation) {
+            if (rotation === 0) return { frames, w: srcW, h: srcH };
+            const swapped = rotation === 90 || rotation === 270;
+            const w = swapped ? srcH : srcW;
+            const h = swapped ? srcW : srcH;
+
+            const src = document.createElement('canvas');
+            src.width = srcW;
+            src.height = srcH;
+            const srcCtx = src.getContext('2d');
+
+            const out = document.createElement('canvas');
+            out.width = w;
+            out.height = h;
+            const outCtx = out.getContext('2d');
+
+            const rotated = frames.map((f) => {
+                srcCtx.putImageData(f.imageData, 0, 0);
+                outCtx.save();
+                outCtx.clearRect(0, 0, w, h);
+                outCtx.translate(w / 2, h / 2);
+                outCtx.rotate(rotation * Math.PI / 180);
+                outCtx.drawImage(src, -srcW / 2, -srcH / 2);
+                outCtx.restore();
+                return { imageData: outCtx.getImageData(0, 0, w, h), delay: f.delay };
+            });
+            return { frames: rotated, w, h };
+        }
+
+        function rotateEditor() {
+            if (!editorState) return;
+            editorState.rotation = (editorState.rotation + 90) % 360;
+            const { frames, w, h } = rotateFrames(
+                editorState.originalFrames, editorState.originalW, editorState.originalH, editorState.rotation);
+            editorState.sourceFrames = frames;
+            editorState.srcW = w;
+            editorState.srcH = h;
+            setupCropCanvasAndDefaultBox();
+            schedulePreview();
+        }
+
+        // Draws frame 0 into the crop-stage canvas and resets the crop box
+        // to the largest 240:320 rect centered in the (possibly just-
+        // rotated) source frame — equivalent to a plain letterbox-fit.
+        function setupCropCanvasAndDefaultBox() {
+            const { srcW, srcH, sourceFrames } = editorState;
+            const cropCanvas = document.getElementById('cropCanvas');
+            const stageW = Math.min(400, srcW);
+            const stageScale = stageW / srcW;
+            cropCanvas.width = srcW;
+            cropCanvas.height = srcH;
+            cropCanvas.style.width = `${Math.round(srcW * stageScale)}px`;
+            cropCanvas.style.height = `${Math.round(srcH * stageScale)}px`;
+            cropCanvas.getContext('2d').putImageData(sourceFrames[0].imageData, 0, 0);
+            editorState.stageScale = stageScale;
+
+            let boxW, boxH;
+            if (srcW / srcH > ASPECT) {
+                boxH = srcH;
+                boxW = boxH * ASPECT;
+            } else {
+                boxW = srcW;
+                boxH = boxW / ASPECT;
+            }
+            editorState.cropRect = {
+                x: (srcW - boxW) / 2,
+                y: (srcH - boxH) / 2,
+                w: boxW,
+                h: boxH,
+            };
+            updateCropBoxElement();
+        }
+
+        // Shared by the GIF-decode path above and the video-frame-extraction
+        // path below — both end up with the same { srcW, srcH, frames } shape.
+        function openEditorWithFrames(srcW, srcH, frames) {
+            editorState = {
+                originalFrames: frames,
+                originalW: srcW,
+                originalH: srcH,
+                rotation: 0,
+                srcW, srcH,
+                sourceFrames: frames,
+            };
+
+            setupCropCanvasAndDefaultBox();
+
+            const avgDelay = frames.reduce((s, f) => s + f.delay, 0) / frames.length;
+            editorState.sourceFps = Math.max(1, Math.round(1000 / avgDelay));
+            const skipSlider = document.getElementById('skipSlider');
+            skipSlider.value = '1';
+            updateSkipLabel();
+
+            document.getElementById('editorOverlay').classList.add('open');
+            renderPreview();
+        }
+
+        function closeEditor() {
+            document.getElementById('editorOverlay').classList.remove('open');
+            if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
+            editorState = null;
+        }
+
+        function updateCropBoxElement() {
+            const { cropRect, stageScale, srcW, srcH } = editorState;
+            const box = document.getElementById('cropBox');
+            box.style.left = `${cropRect.x * stageScale}px`;
+            box.style.top = `${cropRect.y * stageScale}px`;
+            box.style.width = `${cropRect.w * stageScale}px`;
+            box.style.height = `${cropRect.h * stageScale}px`;
+            document.getElementById('cropDims').textContent =
+                `${Math.round(cropRect.w)}x${Math.round(cropRect.h)} of ${srcW}x${srcH}`;
+        }
+
+        function setupCropDragging() {
+            const box = document.getElementById('cropBox');
+            const handle = document.getElementById('cropHandle');
+            let mode = null; // 'move' | 'resize'
+            let startX, startY, startRect;
+
+            function clampRect(r) {
+                const { srcW, srcH } = editorState;
+                r.w = Math.max(20 * ASPECT, Math.min(r.w, srcW));
+                r.h = r.w / ASPECT;
+                if (r.h > srcH) { r.h = srcH; r.w = r.h * ASPECT; }
+                r.x = Math.max(0, Math.min(r.x, srcW - r.w));
+                r.y = Math.max(0, Math.min(r.y, srcH - r.h));
+                return r;
+            }
+
+            function onMove(e) {
+                if (!mode || !editorState) return;
+                const dx = (e.clientX - startX) / editorState.stageScale;
+                const dy = (e.clientY - startY) / editorState.stageScale;
+                let next = { ...startRect };
+                if (mode === 'move') {
+                    next.x = startRect.x + dx;
+                    next.y = startRect.y + dy;
+                } else {
+                    next.w = startRect.w + dx;
+                    next.h = next.w / ASPECT;
+                }
+                editorState.cropRect = clampRect(next);
+                updateCropBoxElement();
+                schedulePreview();
+            }
+
+            function onUp() {
+                mode = null;
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+            }
+
+            box.addEventListener('pointerdown', (e) => {
+                if (e.target === handle) return;
+                mode = 'move';
+                startX = e.clientX; startY = e.clientY;
+                startRect = { ...editorState.cropRect };
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                e.preventDefault();
+            });
+
+            handle.addEventListener('pointerdown', (e) => {
+                mode = 'resize';
+                startX = e.clientX; startY = e.clientY;
+                startRect = { ...editorState.cropRect };
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                e.stopPropagation();
+                e.preventDefault();
+            });
+        }
+
+        function getKeepEveryNth() {
+            return Number(document.getElementById('skipSlider').value);
+        }
+
+        function updateSkipLabel() {
+            const n = getKeepEveryNth();
+            const effectiveFps = editorState ? Math.max(1, Math.round(editorState.sourceFps / n)) : 0;
+            document.getElementById('skipLabel').textContent =
+                n === 1 ? 'None (all frames)' : `1 of every ${n} (~${effectiveFps} fps)`;
+        }
+
+        // Applies the skip-frames slider — drops every Nth frame, merging
+        // its delay forward into the frame kept so total duration is
+        // preserved — without touching editorState.sourceFrames.
+        function getDerivedFrames() {
+            const { sourceFrames } = editorState;
+            const keepEveryNth = getKeepEveryNth();
+
+            const derived = [];
+            for (let i = 0; i < sourceFrames.length; i += keepEveryNth) {
+                let mergedDelay = 0;
+                for (let j = i; j < Math.min(i + keepEveryNth, sourceFrames.length); j++) {
+                    mergedDelay += sourceFrames[j].delay;
+                }
+                derived.push({ imageData: sourceFrames[i].imageData, delay: mergedDelay });
+            }
+            return derived;
+        }
+
+        let previewDebounce = null;
+        function schedulePreview() {
+            if (previewDebounce) clearTimeout(previewDebounce);
+            previewDebounce = setTimeout(renderPreview, 150);
+        }
+
+        function getPosterizeStep() {
+            const colorMode = document.getElementById('colorReduction').value;
+            return colorMode === 'high' ? 48 : colorMode === 'medium' ? 24 : 0;
+        }
+
+        function renderPreview() {
+            if (!editorState) return;
+            updateSkipLabel();
+
+            const frames = getDerivedFrames();
+            const { srcW, srcH, cropRect } = editorState;
+            const totalMs = frames.reduce((s, f) => s + f.delay, 0);
+            document.getElementById('editorSummary').textContent =
+                `Est. output: ${MAX_W}x${MAX_H}, ${frames.length} frames, ~${(totalMs / 1000).toFixed(1)}s loop`;
+
+            const canvas = document.getElementById('previewCanvas');
+            const ctx = canvas.getContext('2d');
+            const src = document.createElement('canvas');
+            src.width = srcW;
+            src.height = srcH;
+            const srcCtx = src.getContext('2d');
+            const posterizeStep = getPosterizeStep();
+
+            if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
+            let i = 0;
+            function step() {
+                if (!editorState || frames.length === 0) return;
+                // Posterize a COPY for display — frames[i].imageData is the
+                // same object stored in editorState.sourceFrames, and
+                // posterize() mutates in place, so posterizing the original
+                // here would permanently bake the preview's color reduction
+                // into the source data used for every later render/upload.
+                const shown = posterizeStep
+                    ? posterize(new ImageData(new Uint8ClampedArray(frames[i].imageData.data), srcW, srcH), posterizeStep)
+                    : frames[i].imageData;
+                srcCtx.putImageData(shown, 0, 0);
+                ctx.clearRect(0, 0, MAX_W, MAX_H);
+                ctx.drawImage(src, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, MAX_W, MAX_H);
+                previewTimer = setTimeout(step, frames[i].delay);
+                i = (i + 1) % frames.length;
+            }
+            step();
+        }
+
+        async function editorUpload() {
+            if (!editorState) return;
+            const statusEl = document.getElementById('status');
+            const progressFill = document.getElementById('progressFill');
+            const { srcW, srcH, cropRect } = editorState;
+            const frames = getDerivedFrames();
+
+            const posterizeStep = getPosterizeStep();
+            const dither = document.getElementById('ditherCheck').checked;
+
+            closeEditor();
+            statusEl.textContent = `Encoding ${frames.length} frames...`;
+            try {
+                const blob = await encodeFrames(frames, srcW, srcH, cropRect, MAX_W, MAX_H,
+                    { dither, posterizeStep });
+                await uploadBlob(blob, statusEl, progressFill);
+            } catch (error) {
+                statusEl.textContent = `❌ ${error.message}`;
+                progressFill.style.width = '0%';
+                showError(`Could not process that GIF: ${error.message}`);
+            }
+        }
+
+        async function uploadBlob(blob, statusEl, progressFill) {
+            // Without an SD card, the device only has a small fixed
+            // onboard-flash budget for GIFs (see NO_SD_UPLOAD_CAP_BYTES) —
+            // checked here, against the final post-conversion blob, so an
+            // oversized file is rejected immediately instead of failing
+            // partway through a slow upload with a less clear server error.
+            const statusRes = await fetch(`http://${CYD_HOST}:${CYD_PORT}/status`).catch(() => null);
+            const status = (statusRes && statusRes.ok) ? await statusRes.json() : null;
+            if (status && !status.sd && blob.size > NO_SD_UPLOAD_CAP_BYTES) {
+                const sizeKB = (blob.size / 1024).toFixed(0);
+                const capKB = (NO_SD_UPLOAD_CAP_BYTES / 1024).toFixed(0);
+                const msg = `No SD card in the device — onboard storage is capped at ${capKB}KB total, and this GIF is ${sizeKB}KB. Insert an SD card, or shrink it (fewer frames/colors, smaller crop).`;
+                statusEl.textContent = `❌ ${msg}`;
+                throw new Error(msg);
+            }
+
+            return new Promise((resolve, reject) => {
+                const sizeKB = (blob.size / 1024).toFixed(0);
+                statusEl.textContent = `Uploading (${sizeKB}KB)...`;
+                progressFill.style.width = '50%';
+
+                // The ESP32 side only recognizes multipart/form-data uploads
+                // (it parses the filename out of the part headers) — a raw
+                // xhr.send(blob) body is silently ignored, so wrap it in
+                // FormData to get the browser to generate proper multipart framing.
+                const name = (blob instanceof File && blob.name) ? blob.name : `upload_${Date.now()}.gif`;
+                const formData = new FormData();
+                formData.append('file', blob, name);
+
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percent = Math.round((event.loaded / event.total) * 100);
+                        progressFill.style.width = `${50 + (percent * 0.5)}%`;
+                        statusEl.textContent = `Uploading: ${percent}%`;
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status === 200) {
+                        progressFill.style.width = '100%';
+                        statusEl.textContent = '✅ GIF sent! Playing on CYD...';
+                        setTimeout(() => {
+                            statusEl.textContent = 'Ready';
+                            progressFill.style.width = '0%';
+                        }, 3000);
+                        refreshFileList();
+                        resolve();
+                    } else {
+                        let message = `HTTP ${xhr.status}`;
+                        try {
+                            const body = JSON.parse(xhr.responseText);
+                            if (body && body.message) message = body.message;
+                        } catch (e) { /* not JSON — keep the plain status */ }
+                        statusEl.textContent = `❌ Upload failed: ${message}`;
+                        reject(new Error(`Upload failed: ${message}`));
+                    }
+                };
+
+                xhr.onerror = () => {
+                    statusEl.textContent = '❌ Upload failed (network error)';
+                    reject(new Error('Upload failed (network error)'));
+                };
+
+                // Defense-in-depth: the ESP32 side is now fixed to always
+                // send a response, but a timeout means this never hangs the
+                // UI silently even if some other failure mode manages to
+                // leave the connection open with nothing coming back.
+                xhr.timeout = 60000;
+                xhr.ontimeout = () => {
+                    statusEl.textContent = '❌ Upload timed out — the CYD may be busy (playing a GIF ties up the SD card)';
+                    reject(new Error('Upload timed out'));
+                };
+
+                xhr.open('POST', `http://${CYD_HOST}:${CYD_PORT}/upload`);
+                xhr.send(formData);
+            });
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'flex';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes && bytes !== 0) return '';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        async function refreshFileList() {
+            const listEl = document.getElementById('fileList');
+            try {
+                const [browseRes, statusRes] = await Promise.all([
+                    fetch(`http://${CYD_HOST}:${CYD_PORT}/browse`),
+                    fetch(`http://${CYD_HOST}:${CYD_PORT}/status`).catch(() => null),
+                ]);
+                if (!browseRes.ok) throw new Error(`HTTP ${browseRes.status}`);
+                const data = await browseRes.json();
+                const status = (statusRes && statusRes.ok) ? await statusRes.json() : null;
+                const nowPlaying = (status && status.playing) ? status.file : null;
+
+                if (!data.gifs || data.gifs.length === 0) {
+                    listEl.innerHTML = '<p class="empty-state">No GIFs on the device yet</p>';
+                    return;
+                }
+
+                listEl.innerHTML = data.gifs.map((gif, i) => {
+                    const safeName = gif.name.replace(/"/g, '&quot;');
+                    const isPlaying = gif.name === nowPlaying;
+                    return `
+                        <div class="file-row${isPlaying ? ' file-row-playing' : ''}">
+                            <canvas class="file-thumb" id="thumb-${i}" width="${THUMB_DIM}" height="${THUMB_DIM}" aria-label="${safeName}"></canvas>
+                            <span class="file-name">${safeName}${isPlaying ? ' <span class="now-playing-badge">▶ Playing now</span>' : ''}<span class="file-size">${formatBytes(gif.size)}</span></span>
+                            <button class="btn danger small" onclick="deleteFile('${safeName}')" ${isPlaying ? 'disabled title="Can\'t delete a GIF that\'s currently playing"' : ''}>Delete</button>
+                        </div>
+                    `;
+                }).join('');
+
+                // Load thumbnails one at a time. The ESP32's SD card is a
+                // single shared SPI bus with no concurrency guard — firing
+                // every request in parallel makes them stall each other
+                // out, so fetch them sequentially instead.
+                for (let i = 0; i < data.gifs.length; i++) {
+                    const canvasEl = document.getElementById(`thumb-${i}`);
+                    if (canvasEl) await loadThumbnail(data.gifs[i].name, canvasEl);
+                }
+            } catch (error) {
+                listEl.innerHTML = `<p class="empty-state">Could not load file list: ${error.message}</p>`;
+            }
+        }
+
+        // /thumb returns a small fixed-size raw RGB565 buffer (first frame
+        // only, THUMB_DIM x THUMB_DIM, row-major, no header) instead of the
+        // full GIF — decoded and drawn to a <canvas> here rather than
+        // fetching potentially megabytes just to show a small preview.
+        const THUMB_DIM = 80;
+
+        async function loadThumbnail(name, canvasEl) {
+            try {
+                const res = await fetch(`http://${CYD_HOST}:${CYD_PORT}/thumb?name=${encodeURIComponent(name)}`);
+                if (!res.ok) return;
+                const buf = await res.arrayBuffer();
+                if (buf.byteLength < THUMB_DIM * THUMB_DIM * 2) return;
+                const view = new DataView(buf);
+                const ctx = canvasEl.getContext('2d');
+                const imgData = ctx.createImageData(THUMB_DIM, THUMB_DIM);
+                for (let i = 0; i < THUMB_DIM * THUMB_DIM; i++) {
+                    const v = view.getUint16(i * 2, true); // little-endian (ESP32 native)
+                    const r5 = (v >> 11) & 0x1F, g6 = (v >> 5) & 0x3F, b5 = v & 0x1F;
+                    const o = i * 4;
+                    imgData.data[o]     = (r5 << 3) | (r5 >> 2);
+                    imgData.data[o + 1] = (g6 << 2) | (g6 >> 4);
+                    imgData.data[o + 2] = (b5 << 3) | (b5 >> 2);
+                    imgData.data[o + 3] = 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+            } catch (e) {
+                // Skip a broken thumbnail rather than blocking the rest.
+            }
+        }
+
+        async function deleteFile(name) {
+            try {
+                const response = await fetch(
+                    `http://${CYD_HOST}:${CYD_PORT}/delete?file=${encodeURIComponent(name)}`
+                );
+                if (!response.ok) {
+                    const body = await response.json().catch(() => null);
+                    throw new Error((body && body.message) || `HTTP ${response.status}`);
+                }
+                await refreshFileList();
+            } catch (error) {
+                showError(`Could not delete ${name}: ${error.message}`);
+            }
+        }
+
+        refreshFileList();
+        setupCropDragging();
+
+        document.getElementById('skipSlider').addEventListener('input', schedulePreview);
+        document.getElementById('colorReduction').addEventListener('change', schedulePreview);
+        document.getElementById('rotateBtn').addEventListener('click', rotateEditor);
+        document.getElementById('editorUploadBtn').addEventListener('click', editorUpload);
+        document.getElementById('editorCancelBtn').addEventListener('click', closeEditor);
+
+        // Drag-and-drop onto the dropzone — same handleLocalFile() entry
+        // point the file input uses. dragenter/dragover must preventDefault
+        // or the browser just navigates to/opens the dropped file instead
+        // of firing 'drop'.
+        const dropzone = document.getElementById('dropzone');
+        ['dragenter', 'dragover'].forEach((evt) => {
+            dropzone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach((evt) => {
+            dropzone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            });
+        });
+        dropzone.addEventListener('drop', (e) => {
+            const file = e.dataTransfer.files[0];
+            if (file) handleLocalFile(file);
+        });
+
+        // Module scripts don't leak to global scope — expose the handlers
+        // referenced by inline onclick/onchange attributes in the HTML.
+        window.sendFromUrl = sendFromUrl;
+        window.handleFileInputChange = handleFileInputChange;
+        window.deleteFile = deleteFile;
+    </script>
+</body>
+</html>

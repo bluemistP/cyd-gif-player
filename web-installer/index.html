@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYD GIF Player — Web Installer</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --text-dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .container { max-width: 560px; width: 100%; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 24px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.75rem; }
+
+  .status {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: var(--radius);
+    font-size: 0.9rem; margin-bottom: 16px;
+  }
+  .status.disconnected { background: rgba(139,148,158,0.1); color: var(--text-dim); }
+  .status.connected    { background: rgba(63,185,80,0.1); color: var(--green); }
+  .status.error        { background: rgba(248,81,73,0.1); color: var(--red); }
+  .status.flash        { background: rgba(88,166,255,0.1); color: var(--accent); }
+
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-dim); flex-shrink: 0;
+  }
+  .status.connected .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status.error .dot    { background: var(--red); }
+  .status.flash .dot    { background: var(--accent); animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 20px; border-radius: var(--radius); font-size: 0.9rem;
+    font-weight: 500; border: 1px solid var(--border); cursor: pointer;
+    background: var(--surface); color: var(--text); transition: all 0.15s;
+    width: 100%;
+  }
+  .btn:hover:not(:disabled) { background: #1c2129; border-color: var(--text-dim); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover:not(:disabled) { background: #4090e0; }
+
+  .btn-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .btn-row .btn { flex: 1; }
+
+  .progress-wrap { margin-top: 8px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: var(--text-dim); }
+  .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; width: 0%; transition: width 0.1s; }
+  .progress-fill.done { background: var(--green); }
+
+  .log {
+    background: #0a0d11; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem;
+    height: 180px; overflow-y: auto; line-height: 1.5; color: var(--text-dim);
+    margin-top: 8px;
+  }
+  .log .line { white-space: pre-wrap; }
+  .log .line.ok  { color: var(--green); }
+  .log .line.err { color: var(--red); }
+  .log .line.info { color: var(--accent); }
+  .log .line.warn { color: var(--yellow); }
+
+  .note { font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
+  .note code { background: var(--border); padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎬 CYD GIF Player</h1>
+  <p class="subtitle">Web installer — flash firmware directly from your browser</p>
+
+  <!-- Browser check -->
+  <div id="browser-check" class="card">
+    <h2>Checking browser</h2>
+    <p class="note" id="browser-msg">Loading…</p>
+  </div>
+
+  <!-- Status -->
+  <div class="status disconnected" id="status-bar">
+    <span class="dot"></span>
+    <span id="status-text">Not connected</span>
+  </div>
+
+  <!-- Buttons -->
+  <div class="btn-row">
+    <button class="btn" id="btn-connect" disabled>📡 Connect to CYD</button>
+    <button class="btn primary hidden" id="btn-flash">⚡ Flash Firmware</button>
+  </div>
+
+  <!-- Progress -->
+  <div class="card hidden" id="progress-card">
+    <h2>Flashing</h2>
+    <div id="progress-section"></div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h2>Console</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note" style="margin-top:16px;">
+    Requires <strong>Chrome or Edge</strong> on desktop (Web Serial API).
+    Connecting resets the board into its bootloader automatically — no need to hold
+    any button on this CYD2USB board. If connecting ever fails, hold <strong>BOOT</strong>
+    while plugging in USB as a fallback, then release when prompted.
+  </p>
+</div>
+
+<script type="module">
+import { ESPLoader, Transport } from './esptool-bundle.js';
+
+// Flash layout must match firmware/partitions.csv and platformio.ini's
+// board_build.filesystem — see the README section on rebuilding this
+// installer's binaries.
+const FLASH_FILES = [
+  { name: 'bootloader.bin', offset: 0x1000 },
+  { name: 'partitions.bin', offset: 0x8000 },
+  { name: 'firmware.bin',   offset: 0x10000 },
+  { name: 'littlefs.bin',   offset: 0x2E0000 },
+];
+
+// --- MD5 (public-domain, adapted from the standard RFC 1321 reference
+// implementation) — used only to verify each file actually landed on the
+// chip correctly after writing (esptool-js exposes flashMd5sum() to read
+// back the device's own MD5 of a flash region; SubtleCrypto doesn't do
+// MD5, so this is the standalone piece needed to compare against it). ---
+function md5Hex(bytes) {
+  function rotl(x, c) { return (x << c) | (x >>> (32 - c)); }
+  function add32(a, b) { return (a + b) >>> 0; }
+  const s = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+             5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+             4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+             6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const K = new Int32Array(64);
+  for (let i = 0; i < 64; i++) K[i] = (Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296)) | 0;
+
+  const origLen = bytes.length;
+  const withOne = new Uint8Array(((origLen + 8) >> 6) * 64 + 64);
+  withOne.set(bytes);
+  withOne[origLen] = 0x80;
+  const bitLen = origLen * 8;
+  const dv = new DataView(withOne.buffer);
+  dv.setUint32(withOne.length - 8, bitLen >>> 0, true);
+  dv.setUint32(withOne.length - 4, Math.floor(bitLen / 4294967296), true);
+
+  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+
+  for (let chunkStart = 0; chunkStart < withOne.length; chunkStart += 64) {
+    const M = new Int32Array(16);
+    for (let i = 0; i < 16; i++) M[i] = dv.getInt32(chunkStart + i * 4, true);
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, g;
+      if (i < 16) { F = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+      else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+      F = add32(add32(add32(F, A), K[i]), M[g]);
+      A = D; D = C; C = B;
+      B = add32(B, rotl(F, s[i]));
+    }
+    a0 = add32(a0, A); b0 = add32(b0, B); c0 = add32(c0, C); d0 = add32(d0, D);
+  }
+
+  const out = new Uint8Array(16);
+  const outDv = new DataView(out.buffer);
+  outDv.setUint32(0, a0, true); outDv.setUint32(4, b0, true);
+  outDv.setUint32(8, c0, true); outDv.setUint32(12, d0, true);
+  return Array.from(out).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// --- DOM refs ---
+const $ = id => document.getElementById(id);
+const statusText = $('status-text');
+const statusBar = $('status-bar');
+const btnConnect = $('btn-connect');
+const btnFlash = $('btn-flash');
+const progressCard = $('progress-card');
+const progressSection = $('progress-section');
+const logEl = $('log');
+
+let device = null;
+let transport = null;
+let esploader = null;
+
+// --- Logging ---
+let logLines = 0;
+function log(msg, cls = '') {
+  const line = document.createElement('div');
+  line.className = `line ${cls}`;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+  logLines++;
+  if (logLines > 300) logEl.removeChild(logEl.firstChild);
+}
+
+// esptool-js reports its own progress through this terminal interface.
+const terminal = {
+  clean() { logEl.innerHTML = ''; logLines = 0; },
+  writeLine(data) { log(data); },
+  write(data) { log(data); },
+};
+
+// --- Status ---
+function setStatus(s, cls) {
+  statusText.textContent = s;
+  statusBar.className = `status ${cls}`;
+}
+
+// --- Main UI flow ---
+btnConnect.addEventListener('click', async () => {
+  btnConnect.disabled = true;
+  btnConnect.textContent = '⏳ Connecting…';
+  setStatus('Connecting…', 'flash');
+
+  try {
+    device = await navigator.serial.requestPort({});
+    transport = new Transport(device, true);
+    esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
+
+    const chipName = await esploader.main();
+    log(`Connected — detected ${chipName}`, 'ok');
+
+    setStatus(`Connected — ${chipName}`, 'connected');
+    btnConnect.classList.add('hidden');
+    btnFlash.classList.remove('hidden');
+    btnFlash.disabled = false;
+  } catch (e) {
+    log(`Error: ${e.message}`, 'err');
+    log('If this keeps failing, hold BOOT while plugging in USB and try again.', 'warn');
+    setStatus('Connect failed — try again', 'error');
+    btnConnect.disabled = false;
+    btnConnect.textContent = '📡 Connect to CYD';
+  }
+});
+
+btnFlash.addEventListener('click', async () => {
+  btnFlash.disabled = true;
+  setStatus('Flashing…', 'flash');
+  progressCard.classList.remove('hidden');
+  progressSection.innerHTML = '';
+
+  const rows = FLASH_FILES.map((file) => {
+    const row = document.createElement('div');
+    row.className = 'progress-wrap';
+    row.innerHTML = `
+      <div class="progress-label">
+        <span>${file.name} → 0x${file.offset.toString(16).toUpperCase().padStart(6,'0')}</span>
+        <span class="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    `;
+    progressSection.appendChild(row);
+    return row;
+  });
+
+  let loadedFiles;
+  try {
+    loadedFiles = await Promise.all(FLASH_FILES.map(async (file) => {
+      const resp = await fetch(new URL(file.name, window.location.href));
+      if (!resp.ok) throw new Error(`${file.name}: HTTP ${resp.status}`);
+      const buf = await resp.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      // esptool-js's writeFlash wants each file's bytes as a real
+      // Uint8Array. An older esptool-js convention (binary string via
+      // String.fromCharCode) is NOT safely interchangeable with this —
+      // internally the library pads/copies file data with
+      // Uint8Array.prototype.set(), which silently zeros out anything
+      // that isn't a numeric-digit character when given a string (each
+      // character goes through ToNumber; non-digits become NaN -> 0).
+      // That was quietly corrupting every write regardless of chip,
+      // cable, or compression — passing the real bytes directly avoids
+      // the conversion entirely.
+      return { ...file, data: bytes, size: bytes.length, md5: md5Hex(bytes) };
+    }));
+  } catch (e) {
+    log(`Cannot load firmware files: ${e.message}`, 'err');
+    setStatus('Flash failed — missing file', 'error');
+    btnFlash.disabled = false;
+    return;
+  }
+
+  // One writeFlash() call for all four files together — the pattern
+  // esptool-js is actually built/tested around (matches every reference
+  // example). Calling it once per file, back-to-back on the same live
+  // connection, was tried here as a "safer isolation" idea, but it's what
+  // actually triggered the bootloader corrupting on every attempt — this
+  // library appears not to tolerate repeated writeFlash() calls in one
+  // session as well as one combined call. So a failed verification below
+  // retries the WHOLE batch (a fresh single writeFlash() call each time),
+  // never a lone file.
+  //
+  // A write can also complete WITHOUT throwing but still leave corrupted
+  // bytes on the chip — seen in practice on this exact machine, where
+  // PlatformIO's CLI esptool flashed the identical COM3/CH340 link
+  // perfectly every time but this browser path did not. So "no exception"
+  // is never treated as proof of success here: every file is checked
+  // against the device's own flashMd5sum() of that region before the
+  // flash is considered done.
+  const MAX_ATTEMPTS = 3;
+  let allOk = false;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      log(`Retrying full flash (attempt ${attempt}/${MAX_ATTEMPTS})…`, 'warn');
+      rows.forEach((row) => {
+        row.querySelector('.progress-fill').classList.remove('done');
+        row.querySelector('.progress-fill').style.width = '0%';
+        row.querySelector('.progress-pct').textContent = '0%';
+      });
+    }
+
+    try {
+      await esploader.writeFlash({
+        fileArray: loadedFiles.map((f) => ({ data: f.data, address: f.offset })),
+        flashMode: 'keep',
+        flashFreq: 'keep',
+        flashSize: 'keep',
+        eraseAll: false,
+        compress: true,
+        reportProgress: (fileIndex, written, total) => {
+          const row = rows[fileIndex];
+          if (!row) return;
+          const pct = Math.round((written / total) * 100);
+          row.querySelector('.progress-fill').style.width = `${pct}%`;
+          row.querySelector('.progress-pct').textContent = `${pct}%`;
+        },
+      });
+
+      let allVerified = true;
+      for (let i = 0; i < loadedFiles.length; i++) {
+        const file = loadedFiles[i];
+        const row = rows[i];
+        row.querySelector('.progress-pct').textContent = 'verifying…';
+        const deviceMd5 = await esploader.flashMd5sum(file.offset, file.size);
+        if (deviceMd5.toLowerCase() !== file.md5.toLowerCase()) {
+          allVerified = false;
+          log(`${file.name}: verification failed (device MD5 ${deviceMd5} != expected ${file.md5})`, 'err');
+          row.querySelector('.progress-pct').textContent = 'verify failed';
+        } else {
+          row.querySelector('.progress-fill').classList.add('done');
+          row.querySelector('.progress-pct').textContent = '100% ✓';
+        }
+      }
+
+      if (!allVerified) throw new Error('One or more files failed verification');
+      allOk = true;
+      lastError = null;
+      break;
+    } catch (e) {
+      lastError = e;
+      log(`Flash attempt ${attempt} failed: ${e.message}`, 'err');
+    }
+  }
+
+  if (!allOk) {
+    log(`Giving up after ${MAX_ATTEMPTS} attempts: ${lastError?.message || 'unknown error'}`, 'err');
+    log('Flash incomplete — click "Flash Firmware" to try again.', 'warn');
+    setStatus('Flash incomplete — retry', 'error');
+    btnFlash.disabled = false;
+    return;
+  }
+
+  log('All files flashed.', 'ok');
+  log('Resetting device…', 'info');
+  try {
+    // esptool-js's own after('hard_reset') just calls setRTS(false) once
+    // (no preceding setRTS(true)) for a non-USB-OTG transport — that's a
+    // plain assignment, not a pulse. If RTS happens to already be false
+    // at that point (common, since earlier flash-write traffic can leave
+    // it there), the CH340's reset circuit never sees a transition and
+    // the chip stays parked in the download stub — a blank screen until
+    // the cable's unplugged and replugged. Doing our own explicit
+    // DTR/RTS pulse here (the same sequence PlatformIO's own uploads use
+    // successfully) doesn't depend on whatever state the line was
+    // already in.
+    await transport.setDTR(false);
+    await transport.setRTS(true);
+    await new Promise((r) => setTimeout(r, 100));
+    await transport.setRTS(false);
+    await new Promise((r) => setTimeout(r, 100));
+
+    setStatus('✓ Flash complete — device rebooted', 'connected');
+    btnFlash.textContent = '⚡ Flash Again';
+    log('Done! The CYD should now be running the GIF player firmware.', 'ok');
+  } catch (e) {
+    log(`Reset error: ${e.message}`, 'err');
+    setStatus('Flashed — manual reset needed', 'connected');
+  }
+  btnFlash.disabled = false;
+});
+
+// --- Browser check ---
+async function init() {
+  if (!('serial' in navigator)) {
+    $('browser-msg').innerHTML = '⚠️ <strong>Web Serial API not available.</strong> This page requires <strong>Chrome or Edge</strong> on desktop (Windows, macOS, Linux, ChromeOS). It will not work on Firefox, Safari, or mobile.';
+    $('browser-msg').style.color = 'var(--yellow)';
+    return;
+  }
+
+  $('browser-msg').innerHTML = '✅ Web Serial API available — click <strong>"Connect to CYD"</strong> to begin.';
+  btnConnect.disabled = false;
+}
+
+init();
+</script>
+</body>
+</html>

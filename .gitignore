@@ -1,0 +1,10 @@
+# PlatformIO build cache / downloaded toolchains & libraries
+firmware/.pio/
+
+# Editor/OS cruft
+.DS_Store
+Thumbs.db
+
+# Local-only personal reference material, deliberately not tracked
+# (see git history at d30aca3 for why this was removed from version control)
+/docs-local-reference/
